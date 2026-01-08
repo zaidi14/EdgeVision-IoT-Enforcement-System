@@ -344,10 +344,10 @@ https://drive.google.com/file/d/1yai9J0rBJ-RyXSsxcO8-n4GXpXs1HBnq/view?usp=drive
 
 **Course:** COMP 413 – Internet of Things: Final Project  
 Group Members:
-ZAIDI SYED MUHAMMAD MOJIZ ALI
-ERYAŞAR SELİN
-KABA GÜLESER
-MOHAMED MOSTAFA MOHAMED MAHMOUD MOHAMEDY
+-ZAIDI SYED MUHAMMAD MOJIZ ALI
+-ERYAŞAR SELİN
+-KABA GÜLESER
+-MOHAMED MOSTAFA MOHAMED MAHMOUD MOHAMEDY
 
 **References:**
 - Edge Impulse: https://edgeimpulse.com
