@@ -17,6 +17,9 @@ This project implements a **real-time, edge-AI-powered IoT system** to detect an
 - ✅ **Optimized streaming** with low-latency MJPEG (tunable quality presets)
 - ✅ **Full-stack cloud integration** (Node.js backend, React dashboard, PostgreSQL)
 
+
+### LIVE VIDEO DEMO
+https://drive.google.com/file/d/1TSXFx4bkya--dbuV1GhmrOQQIrGRqzua/view
 ---
 
 ## Problem Statement & Motivation
