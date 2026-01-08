@@ -6,7 +6,7 @@
 
 ## Project Overview
 
-This project implements a **real-time, edge-AI-powered IoT system** to detect and monitor illegal parking violations in urban environments. The system combines ultrasonic sensing, machine learning inference, and cloud integration to provide city planners and enforcement officers with actionable real-time data, reducing manual patrol overhead and improving traffic flow.
+This project implements a **real-time, edge-powered IoT system** to detect and monitor illegal parking violations in urban environments. The system combines ultrasonic sensing, machine learning inference, and cloud integration to provide city planners and enforcement officers with actionable real-time data, reducing manual patrol overhead and improving traffic flow.
 
 ### Key Features
 - ✅ **Real-time detection** via ultrasonic sensors + edge-deployed TinyML car detection
