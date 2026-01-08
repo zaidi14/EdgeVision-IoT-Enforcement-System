@@ -107,17 +107,17 @@ ESP32-CAM (AI Thinker Module)
 ```
 
 ### Components List
-| Item | Qty | Cost (USD) |
+| Item | Qty | Cost (TL) |
 |------|-----|-----------|
-| ESP32-MAIN (DevKit) | 1 | $10 |
-| ESP32-CAM (AI Thinker) | 1 | $15 |
-| HC-SR04 Ultrasonic | 1 | $3 |
-| RGB LEDs | 2 | $1 |
-| 220Ω Resistors | 5 | $0.50 |
-| Buzzer (5V) | 1 | $2 |
-| Jumper Wires | 50 | $2 |
-| USB Cables | 2 | $3 |
-| **Total** | | **~$36.50** |
+| ESP32-MAIN (DevKit) | 1 | 250 |
+| ESP32-CAM (AI Thinker) | 1 | 450 |
+| HC-SR04 Ultrasonic | 1 | 70 |
+| RGB LEDs | 2 | 30 |
+| 220Ω Resistors | 5 | 25 |
+| Buzzer (5V) | 1 | 100 |
+| Jumper Wires | 50 | 50 |
+| USB Cables | 2 | 50 |
+| **Total** | | **1025** |
 
 ---
 
@@ -333,10 +333,11 @@ iot-parking-monitor/
 ---
 
 
-### LIVE VIDEO DEMO
+###  VIDEO DEMO DASHBOARD
 https://drive.google.com/file/d/1TSXFx4bkya--dbuV1GhmrOQQIrGRqzua/view
 ---
-
+###  VIDEO DEMO LIVE
+https://drive.google.com/file/d/1yai9J0rBJ-RyXSsxcO8-n4GXpXs1HBnq/view?usp=drive_link
 ---
 
 ## Team & Acknowledgments
