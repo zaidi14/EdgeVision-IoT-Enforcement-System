@@ -2,8 +2,10 @@ import { useEffect, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { api, Node, ViolationLog } from './services/api';
 import { ParkingProvider, useParking } from './context/ParkingContext';
+import './styles/theme.css';
 import PhoneCameraStream from './components/PhoneCameraStream';
 import ParkingStatusCard from './components/ParkingStatusCard';
+import { ViolationHistory } from './components/ViolationHistory';
 
 function AppContent() {
   const [nodes, setNodes] = useState<Node[]>([]);
@@ -13,12 +15,13 @@ function AppContent() {
   const [showVideo, setShowVideo] = useState<{[key: string]: boolean}>({});
   const [streamingNode, setStreamingNode] = useState<string | null>(null);
   const [liveFrames, setLiveFrames] = useState<{[key: string]: string}>({});
-  const { updateSession, setViolation, startTimer, stopTimer, resetSession } = useParking();
+  const [viewMode, setViewMode] = useState<'dashboard' | 'history'>('dashboard');
+  const { sessions, updateSession, setViolation, startTimer, stopTimer, resetSession } = useParking();
   
   useEffect(() => {
     api.getNodes().then(setNodes);
     
-    const socketInstance = io('http://192.168.1.110:3000');
+    const socketInstance = io('http://192.168.1.116:3000');
     
     socketInstance.on('connect', () => {
       console.log('✅ Connected');
@@ -122,113 +125,155 @@ function AppContent() {
   const getStatusColor = (status: string | null) => {
     return status === 'online' ? '#10b981' : '#6b7280';
   };
+
+  // Determine overall dashboard background color based on any violation
+  const hasViolation = Object.values(sessions).some(session => session?.state === 'VIOLATION');
+  const dashboardBgColor = hasViolation ? '#fee2e2' : '#f0fdf4'; // Light red or light green
+  const headerBg = hasViolation ? 'linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%)' : 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)';
   
   return (
-    <div style={{ minHeight: '100vh', background: '#f5f5f5' }}>
-      <header style={{ background: 'white', padding: '20px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', marginBottom: '20px' }}>
-        <div style={{ maxWidth: '1400px', margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h1 style={{ fontSize: '28px', fontWeight: 'bold' }}>🚗 IoT Parking Monitor</h1>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-            <span style={{ color: '#6b7280', fontSize: '14px' }}>Active Nodes: <strong>{nodes.length}</strong></span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: connected ? '#10b981' : '#ef4444' }} />
-              <span style={{ color: '#6b7280' }}>{connected ? 'Connected' : 'Disconnected'}</span>
+    <div className="app-container">
+      <header className="app-header" style={{ borderBottomColor: hasViolation ? '#ef4444' : '#10b981' }}>
+        <div className="app-header-inner">
+          <h1 className="brand-title">🚗 IoT Parking Monitor</h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <span className="muted">Active Nodes: <strong style={{ color: '#0f172a' }}>{nodes.length}</strong></span>
+            <div className="status-chip" style={{ borderColor: connected ? '#10b981' : '#ef4444', background: connected ? '#ecfdf5' : '#fee2e2' }}>
+              <span className="status-dot" style={{ background: connected ? '#10b981' : '#ef4444', boxShadow: connected ? '0 0 10px #10b981' : '0 0 10px #ef4444' }}></span>
+              <span className="status-text" style={{ color: connected ? '#065f46' : '#7f1d1d' }}>{connected ? 'CONNECTED' : 'DISCONNECTED'}</span>
             </div>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              onClick={() => setViewMode('dashboard')}
+              style={{
+                padding: '10px 16px',
+                borderRadius: 8,
+                border: viewMode === 'dashboard' ? '2px solid #0ea5e9' : '1px solid #cbd5e1',
+                background: viewMode === 'dashboard' ? '#e0f2fe' : '#ffffff',
+                color: '#0f172a',
+                cursor: 'pointer',
+                fontWeight: 600
+              }}
+            >
+              Dashboard
+            </button>
+            <button
+              onClick={() => setViewMode('history')}
+              style={{
+                padding: '10px 16px',
+                borderRadius: 8,
+                border: viewMode === 'history' ? '2px solid #0ea5e9' : '1px solid #cbd5e1',
+                background: viewMode === 'history' ? '#e0f2fe' : '#ffffff',
+                color: '#0f172a',
+                cursor: 'pointer',
+                fontWeight: 600
+              }}
+            >
+              Violation Photos
+            </button>
           </div>
         </div>
       </header>
-      
-      <main style={{ maxWidth: '1400px', margin: '0 auto', padding: '0 20px' }}>
-        {nodes.length === 0 ? (
-          <div style={{ background: 'white', padding: '60px', borderRadius: '8px', textAlign: 'center' }}>
-            <p style={{ fontSize: '18px', color: '#6b7280', marginBottom: '8px' }}>
-              No parking nodes detected.
-            </p>
-            <p style={{ fontSize: '14px', color: '#9ca3af' }}>
-              Connect ESP32 devices to start monitoring...
-            </p>
-          </div>
+
+      <main className="grid">
+        {viewMode === 'history' ? (
+          <ViolationHistory />
         ) : (
-          <div style={{ display: 'grid', gap: '20px', gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))' }}>
-            {nodes.map(node => (
-              <ParkingStatusCard 
-                key={node.node_id}
-                nodeId={node.node_id}
-                location={node.location || undefined}
-              />
-            ))}
-          </div>
-        )}
-        
-        {/* Phone Camera Streaming Modal */}
-        {streamingNode && (
-          <PhoneCameraStream 
-            nodeId={streamingNode} 
-            onClose={() => setStreamingNode(null)} 
-          />
-        )}
-        
-        {/* Violation Logs Modal */}
-        {selectedNode && (
-          <div style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: 'rgba(0,0,0,0.7)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000
-          }}
-          onClick={() => setSelectedNode(null)}
-          >
-            <div style={{
-              background: 'white',
-              borderRadius: '12px',
-              padding: '24px',
-              maxWidth: '600px',
-              maxHeight: '80vh',
-              overflow: 'auto',
-              width: '90%'
-            }}
-            onClick={(e) => e.stopPropagation()}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                <h2 style={{ fontSize: '24px', fontWeight: 'bold' }}>Violation History - {selectedNode}</h2>
-                <button
-                  onClick={() => setSelectedNode(null)}
-                  style={{ background: '#6b7280', color: 'white', border: 'none', borderRadius: '4px', padding: '8px 16px', cursor: 'pointer' }}
-                >
-                  Close
-                </button>
+          <>
+            {nodes.length === 0 ? (
+              <div style={{ background: 'white', padding: '60px', borderRadius: '8px', textAlign: 'center' }}>
+                <p style={{ fontSize: '18px', color: '#6b7280', marginBottom: '8px' }}>
+                  No parking nodes detected.
+                </p>
+                <p style={{ fontSize: '14px', color: '#9ca3af' }}>
+                  Connect ESP32 devices to start monitoring...
+                </p>
               </div>
-              
-              {violations.length === 0 ? (
-                <p style={{ textAlign: 'center', color: '#6b7280', padding: '40px' }}>No violations recorded.</p>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  {violations.map(log => (
-                    <div key={log.id} style={{
-                      background: '#f9fafb',
-                      padding: '16px',
-                      borderRadius: '8px',
-                      borderLeft: '4px solid #ef4444'
-                    }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                        <span style={{ fontWeight: 'bold', color: '#ef4444' }}>{log.violation_type}</span>
-                        <span style={{ fontSize: '12px', color: '#6b7280' }}>
-                          {new Date(log.created_at).toLocaleString()}
-                        </span>
-                      </div>
-                      <p style={{ fontSize: '14px', color: '#374151' }}>{log.details}</p>
+            ) : (
+              <>
+                {nodes.map(node => (
+                  <ParkingStatusCard 
+                    key={node.node_id}
+                    nodeId={node.node_id}
+                    location={node.location || undefined}
+                    cameraVideoUrl={node.last_video_url || undefined}
+                  />
+                ))}
+              </>
+            )}
+            
+            {/* Phone Camera Streaming Modal */}
+            {streamingNode && (
+              <PhoneCameraStream 
+                nodeId={streamingNode} 
+                onClose={() => setStreamingNode(null)} 
+              />
+            )}
+            
+            {/* Violation Logs Modal */}
+            {selectedNode && (
+              <div style={{
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                background: 'rgba(0,0,0,0.7)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 1000
+              }}
+              onClick={() => setSelectedNode(null)}
+              >
+                <div style={{
+                  background: 'white',
+                  borderRadius: '12px',
+                  padding: '24px',
+                  maxWidth: '600px',
+                  maxHeight: '80vh',
+                  overflow: 'auto',
+                  width: '90%'
+                }}
+                onClick={(e) => e.stopPropagation()}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                    <h2 style={{ fontSize: '24px', fontWeight: 'bold' }}>Violation History - {selectedNode}</h2>
+                    <button
+                      onClick={() => setSelectedNode(null)}
+                      style={{ background: '#6b7280', color: 'white', border: 'none', borderRadius: '4px', padding: '8px 16px', cursor: 'pointer' }}
+                    >
+                      Close
+                    </button>
+                  </div>
+                  
+                  {violations.length === 0 ? (
+                    <p style={{ textAlign: 'center', color: '#6b7280', padding: '40px' }}>No violations recorded.</p>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      {violations.map(log => (
+                        <div key={log.id} style={{
+                          background: '#f9fafb',
+                          padding: '16px',
+                          borderRadius: '8px',
+                          borderLeft: '4px solid #ef4444'
+                        }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                            <span style={{ fontWeight: 'bold', color: '#ef4444' }}>{log.violation_type}</span>
+                            <span style={{ fontSize: '12px', color: '#6b7280' }}>
+                              {new Date(log.created_at).toLocaleString()}
+                            </span>
+                          </div>
+                          <p style={{ fontSize: '14px', color: '#374151' }}>{log.details}</p>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  )}
                 </div>
-              )}
-            </div>
-          </div>
+              </div>
+            )}
+          </>
         )}
       </main>
     </div>

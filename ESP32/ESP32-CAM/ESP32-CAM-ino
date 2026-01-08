@@ -12,13 +12,14 @@
 // Then this include will work:
 #define EI_CLASSIFIER_SLICES_PER_MODEL_WINDOW 3
 #include <illegal-parking-car-detection_inferencing.h>
+#include "edge-impulse-sdk/dsp/image/image.hpp"
 
 // ===================== WIFI =====================
 const char* ssid = "FiberHGW_ZT54SE_5";
 const char* password = "kXcyDU7b3HCx";
 
 // ===================== MQTT =====================
-const char* mqtt_server = "192.168.1.110";
+const char* mqtt_server = "192.168.1.116";
 const int mqtt_port = 1883;
 const char* mqtt_user = "mojiz";
 const char* mqtt_password = "1735";
@@ -26,9 +27,22 @@ const char* mqtt_password = "1735";
 const char* NODE_ID = "parking_zone_c1";
 const char* MQTT_CLIENT_ID = "parking_zone_c1_cam";
 
+// ===================== TEST MODE =====================
+// Set to false to use REAL ML car detection with proper image processing
+const bool TEST_MODE = false;
+
+// ===================== ML IMAGE PROCESSING =====================
+#define EI_CAMERA_RAW_FRAME_BUFFER_COLS    320
+#define EI_CAMERA_RAW_FRAME_BUFFER_ROWS    240
+#define EI_CAMERA_FRAME_BYTE_SIZE          3
+uint8_t *snapshot_buf = nullptr;  // RGB888 buffer for ML
+
 WiFiClient espClient;
 PubSubClient client(espClient);
 WebServer server(80);
+
+// MQTT buffer size for photo transmission (default is 256, need larger for chunks)
+#define MQTT_MAX_PACKET_SIZE 10000
 
 // ===================== AI THINKER PINOUT =====================
 #define PWDN_GPIO_NUM     32
@@ -49,6 +63,44 @@ WebServer server(80);
 #define PCLK_GPIO_NUM     22
 
 bool streamEnabled = true;
+
+// ===================== BASE64 ENCODING =====================
+const char base64_chars[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+void base64_encode(char* output, const char* input, size_t input_len) {
+  size_t i = 0, j = 0;
+  unsigned char char_array_3[3], char_array_4[4];
+
+  while (input_len--) {
+    char_array_3[i++] = *(input++);
+    if (i == 3) {
+      char_array_4[0] = (char_array_3[0] & 0xfc) >> 2;
+      char_array_4[1] = ((char_array_3[0] & 0x03) << 4) + ((char_array_3[1] & 0xf0) >> 4);
+      char_array_4[2] = ((char_array_3[1] & 0x0f) << 2) + ((char_array_3[2] & 0xc0) >> 6);
+      char_array_4[3] = char_array_3[2] & 0x3f;
+
+      for(i = 0; i < 4; i++)
+        output[j++] = base64_chars[char_array_4[i]];
+      i = 0;
+    }
+  }
+
+  if (i) {
+    for(size_t k = i; k < 3; k++)
+      char_array_3[k] = '\0';
+
+    char_array_4[0] = (char_array_3[0] & 0xfc) >> 2;
+    char_array_4[1] = ((char_array_3[0] & 0x03) << 4) + ((char_array_3[1] & 0xf0) >> 4);
+    char_array_4[2] = ((char_array_3[1] & 0x0f) << 2) + ((char_array_3[2] & 0xc0) >> 6);
+
+    for (size_t k = 0; k < i + 1; k++)
+      output[j++] = base64_chars[char_array_4[k]];
+
+    while(i++ < 3)
+      output[j++] = '=';
+  }
+  output[j] = '\0';
+}
 
 // ===================== ML MODEL PRINTF FUNCTION =====================
 void ei_printf(const char *format, ...) {
@@ -87,12 +139,17 @@ void startCamera() {
   config.pin_sscb_scl = SIOC_GPIO_NUM;
   config.pin_pwdn     = PWDN_GPIO_NUM;
   config.pin_reset    = RESET_GPIO_NUM;
-  config.xclk_freq_hz = 5000000;
+  // Increase XCLK for faster sensor readout
+  config.xclk_freq_hz = 20000000; // 20 MHz
   config.pixel_format = PIXFORMAT_JPEG;
-  config.frame_size   = FRAMESIZE_QQVGA;
-  config.jpeg_quality = 20;  // INCREASED from 14 (lower quality = smaller frames, prevents FB-OVF)
-  config.fb_count     = 2;   // INCREASED from 1 (double buffer for smoother streaming)
-  config.fb_location  = CAMERA_FB_IN_DRAM;
+  // Default to balanced speed/quality; can be adjusted at runtime
+  config.frame_size   = FRAMESIZE_QVGA;   // 320x240 improves clarity over QQVGA
+  config.jpeg_quality = 12;               // Lower number = higher quality (10-15 is reasonable)
+  config.fb_count     = 2;                // Double buffer for smoother streaming
+  config.fb_location  = CAMERA_FB_IN_PSRAM; // Use PSRAM for larger frames
+#ifdef CONFIG_CAMERA_GRAB_MODE
+  config.grab_mode    = CAMERA_GRAB_LATEST; // Drop old frames to minimize latency
+#endif
 
   esp_err_t err = esp_camera_init(&config);
   if (err != ESP_OK) {
@@ -101,33 +158,100 @@ void startCamera() {
     ESP.restart();
   }
 
+  // Apply sensor-level tuning for streaming
+  sensor_t *s = esp_camera_sensor_get();
+  if (s) {
+    s->set_framesize(s, FRAMESIZE_QVGA); // ensure runtime setting
+    s->set_quality(s, 12);
+    s->set_brightness(s, 0);
+    s->set_contrast(s, 1); // mild contrast to improve perceived sharpness
+  }
+
   Serial.println("📷 Camera Ready");
 }
 
-// ===================== REAL ML INFERENCE =====================
+// ===================== REAL ML INFERENCE WITH PROPER IMAGE PROCESSING =====================
 bool runTinyML(camera_fb_t* fb, float &confidence) {
-  // Get current frame from camera
+  // TEST MODE: Simulate car detection for testing
+  if (TEST_MODE) {
+    Serial.println("🧪 TEST MODE: Simulating CAR detection");
+    confidence = 0.85; // High confidence
+    Serial.printf("🎯 ML Result (TEST): CAR (Confidence: %.2f)\n", confidence);
+    return true; // Always return car detected in test mode
+  }
+
+  // REAL ML INFERENCE WITH PROPER JPEG→RGB CONVERSION
   if (!fb) {
+    Serial.println("❌ No frame buffer provided");
     confidence = 0.0;
     return false;
   }
 
-  // Prepare signal for ML model
+  // Allocate RGB888 buffer for decoded JPEG
+  if (snapshot_buf == nullptr) {
+    snapshot_buf = (uint8_t*)malloc(EI_CAMERA_RAW_FRAME_BUFFER_COLS * EI_CAMERA_RAW_FRAME_BUFFER_ROWS * EI_CAMERA_FRAME_BYTE_SIZE);
+    if (snapshot_buf == nullptr) {
+      Serial.println("❌ Failed to allocate snapshot buffer");
+      confidence = 0.0;
+      return false;
+    }
+  }
+
+  // Convert JPEG to RGB888
+  Serial.println("📸 Converting JPEG to RGB888...");
+  bool converted = fmt2rgb888(fb->buf, fb->len, PIXFORMAT_JPEG, snapshot_buf);
+  if (!converted) {
+    Serial.println("❌ JPEG to RGB conversion failed");
+    confidence = 0.0;
+    return false;
+  }
+
+  // Resize/crop to model input size (96x96 from Edge Impulse)
+  bool do_resize = false;
+  if ((EI_CLASSIFIER_INPUT_WIDTH != EI_CAMERA_RAW_FRAME_BUFFER_COLS) ||
+      (EI_CLASSIFIER_INPUT_HEIGHT != EI_CAMERA_RAW_FRAME_BUFFER_ROWS)) {
+    do_resize = true;
+  }
+
+  if (do_resize) {
+    Serial.printf("🔧 Resizing from %dx%d to %dx%d\n", 
+                  EI_CAMERA_RAW_FRAME_BUFFER_COLS, EI_CAMERA_RAW_FRAME_BUFFER_ROWS,
+                  EI_CLASSIFIER_INPUT_WIDTH, EI_CLASSIFIER_INPUT_HEIGHT);
+    
+    ei::image::processing::crop_and_interpolate_rgb888(
+      snapshot_buf,
+      EI_CAMERA_RAW_FRAME_BUFFER_COLS,
+      EI_CAMERA_RAW_FRAME_BUFFER_ROWS,
+      snapshot_buf,
+      EI_CLASSIFIER_INPUT_WIDTH,
+      EI_CLASSIFIER_INPUT_HEIGHT
+    );
+  }
+
+  // Prepare signal for classifier
   ei::signal_t signal;
   signal.total_length = EI_CLASSIFIER_INPUT_WIDTH * EI_CLASSIFIER_INPUT_HEIGHT;
-  signal.get_data = [&](size_t offset, size_t length, float *out_ptr) -> int {
-    // For JPEG input, use raw pixel data conversion
-    // This is a simplified approach - for production, properly convert JPEG to RGB
-    size_t bytes_read = length;
-    if (offset + bytes_read > signal.total_length) {
-      bytes_read = signal.total_length - offset;
+  signal.get_data = [](size_t offset, size_t length, float *out_ptr) -> int {
+    // Convert RGB888 buffer to float array expected by classifier
+    size_t pixel_ix = offset * 3;
+    size_t pixels_left = length;
+    size_t out_ptr_ix = 0;
+
+    while (pixels_left != 0) {
+      // Swap BGR to RGB (ESP32 camera quirk)
+      // Pack RGB into single float value
+      out_ptr[out_ptr_ix] = (snapshot_buf[pixel_ix + 2] << 16) + 
+                            (snapshot_buf[pixel_ix + 1] << 8) + 
+                            snapshot_buf[pixel_ix];
+      out_ptr_ix++;
+      pixel_ix += 3;
+      pixels_left--;
     }
-    // Fill with frame buffer data (simplified - would need proper JPEG decoding for production)
-    memset(out_ptr, 128, bytes_read * sizeof(float));
-    return bytes_read;
+    return 0;
   };
 
   // Run classifier
+  Serial.println("🧠 Running ML classifier...");
   ei_impulse_result_t result = { 0 };
   EI_IMPULSE_ERROR err = run_classifier(&signal, &result, false);
   
@@ -142,10 +266,12 @@ bool runTinyML(camera_fb_t* fb, float &confidence) {
   
   #if EI_CLASSIFIER_OBJECT_DETECTION == 1
     // Object detection mode - look for car bounding boxes
+    Serial.println("📦 Object detection mode:");
     for (uint32_t i = 0; i < result.bounding_boxes_count; i++) {
       ei_impulse_result_bounding_box_t bb = result.bounding_boxes[i];
       if (bb.value > 0) {
-        Serial.printf("🚗 Detected: %s (%.2f)\n", bb.label, bb.value);
+        Serial.printf("  🚗 %s (%.2f) [x:%u y:%u w:%u h:%u]\n", 
+                      bb.label, bb.value, bb.x, bb.y, bb.width, bb.height);
         if (strcmp(bb.label, "car") == 0 || strcmp(bb.label, "vehicle") == 0) {
           carConfidence = max(carConfidence, bb.value);
         }
@@ -153,17 +279,24 @@ bool runTinyML(camera_fb_t* fb, float &confidence) {
     }
   #else
     // Classification mode - look for car class
-    ei_impulse_result_classification_t classification = result.classification[0];
-    Serial.printf("📊 %s: %.2f\n", classification.label, classification.value);
-    if (strcmp(classification.label, "car") == 0 || strcmp(classification.label, "vehicle") == 0) {
-      carConfidence = classification.value;
+    Serial.println("📊 Classification mode:");
+    for (uint16_t i = 0; i < EI_CLASSIFIER_LABEL_COUNT; i++) {
+      Serial.printf("  %s: %.5f\n", result.classification[i].label, result.classification[i].value);
+      if (strcmp(result.classification[i].label, "car") == 0 || 
+          strcmp(result.classification[i].label, "vehicle") == 0) {
+        carConfidence = result.classification[i].value;
+      }
     }
   #endif
 
   confidence = carConfidence;
-  bool isCar = carConfidence > 0.5;  // Threshold for car detection
   
-  Serial.printf("🎯 ML Result: %s (Confidence: %.2f)\n", isCar ? "CAR" : "NOT CAR", confidence);
+  // Use 0.65 threshold for real-world detection (balance between accuracy and false positives)
+  bool isCar = carConfidence >= 0.65;
+  
+  Serial.printf("🎯 ML Result: %s (Confidence: %.2f)\n", isCar ? "✅ CAR DETECTED" : "❌ NOT CAR", confidence);
+  Serial.printf("⏱️  Timing - DSP: %dms, Classification: %dms, Anomaly: %dms\n",
+                result.timing.dsp, result.timing.classification, result.timing.anomaly);
   
   return isCar;
 }
@@ -177,6 +310,7 @@ void handleStream() {
 
   Serial.println("🎥 Stream requested - starting MJPEG");
   WiFiClient streamClient = server.client();
+  streamClient.setNoDelay(true); // Reduce TCP buffering latency
   
   // Send headers with optimized settings
   streamClient.println("HTTP/1.1 200 OK");
@@ -222,7 +356,7 @@ void handleStream() {
       Serial.printf("🎥 Sent %d frames\n", frameCount);
     }
     
-    delay(20);  // REDUCED from 33ms (50fps target instead of 30fps)
+    delay(5);   // Shorter delay to push frames faster; keep CPU responsive
   }
   
   Serial.printf("🎥 Stream ended - sent %d frames\n", frameCount);
@@ -240,26 +374,101 @@ void callback(char* topic, byte* payload, unsigned int length) {
     camera_fb_t* fb = esp_camera_fb_get();
     if (!fb) {
       Serial.println("❌ Failed to capture frame for ML");
+      // Notify that it's not a car so system can reset
+      String resultTopic = "node/" + String(NODE_ID) + "/cam/ml_result";
+      String msg = "{\"label\":\"not_car\",\"confidence\":0.0}";
+      client.publish(resultTopic.c_str(), msg.c_str());
       return;
     }
 
     // Run real ML model inference
     float confidence;
     bool isCar = runTinyML(fb, confidence);
-    esp_camera_fb_return(fb);
+    
+    // Send ML result to backend
+    String resultTopic = "node/" + String(NODE_ID) + "/cam/ml_result";
+    String msg =
+      "{\"label\":\"" + String(isCar ? "car" : "not_car") +
+      "\",\"confidence\":" + String(confidence, 2) + "}";
 
-    // Only send result if ML says it's actually a car
+    client.publish(resultTopic.c_str(), msg.c_str());
+    
     if (isCar) {
-      String resultTopic = "node/" + String(NODE_ID) + "/cam/ml_result";
-      String msg =
-        "{\"label\":\"" + String(isCar ? "car" : "not_car") +
-        "\",\"confidence\":" + String(confidence, 2) + "}";
-
-      client.publish(resultTopic.c_str(), msg.c_str());
       Serial.println("✅ Car confirmed - published to backend");
     } else {
       Serial.println("❌ Not a car - discarding detection");
     }
+    
+    esp_camera_fb_return(fb);
+  }
+
+  // Capture violation snapshot when requested by backend
+  if (t.endsWith("/cam/cmd/capture_violation")) {
+    Serial.println("📸 Violation snapshot requested...");
+    
+    camera_fb_t* fb = esp_camera_fb_get();
+    if (!fb) {
+      Serial.println("❌ Failed to capture violation snapshot");
+      return;
+    }
+
+    // Send JPEG photo via MQTT (Base64 encoded for reliability)
+    String photoTopic = "node/" + String(NODE_ID) + "/cam/violation_photo";
+    
+    // Encode to Base64 for MQTT transmission
+    size_t base64_len = ((fb->len + 2) / 3) * 4 + 1;
+    char* base64_buf = (char*)malloc(base64_len);
+    
+    if (base64_buf) {
+      base64_encode(base64_buf, (const char*)fb->buf, fb->len);
+      
+      // Split into chunks for reliable MQTT transmission
+      const size_t chunkSize = 4000; // Smaller chunks for reliability
+      size_t offset = 0;
+      int chunkNum = 0;
+      size_t totalLen = strlen(base64_buf);
+      
+      Serial.printf("📤 Sending %zu bytes in chunks of %zu...\n", totalLen, chunkSize);
+      
+      while (offset < totalLen) {
+        size_t remaining = totalLen - offset;
+        size_t thisChunk = (remaining > chunkSize) ? chunkSize : remaining;
+        
+        String chunk = String(base64_buf).substring(offset, offset + thisChunk);
+        String chunkTopic = photoTopic + "/chunk/" + String(chunkNum);
+        
+        // Ensure MQTT client is connected before sending
+        if (!client.connected()) {
+          Serial.println("⚠️ MQTT disconnected during photo send, reconnecting...");
+          client.connect(MQTT_CLIENT_ID, mqtt_user, mqtt_password);
+          delay(100);
+        }
+        
+        bool sent = client.publish(chunkTopic.c_str(), chunk.c_str());
+        if (sent) {
+          Serial.printf("📤 Sent chunk %d (%zu bytes)\n", chunkNum, thisChunk);
+        } else {
+          Serial.printf("❌ Failed to send chunk %d\n", chunkNum);
+        }
+        
+        offset += thisChunk;
+        chunkNum++;
+        client.loop(); // Process MQTT
+        delay(100); // Longer delay between chunks for reliability
+      }
+      
+      // Send completion marker
+      String completeTopic = photoTopic + "/complete";
+      String completeMsg = "{\"chunks\":" + String(chunkNum) + ",\"size\":" + String(fb->len) + "}";
+      client.publish(completeTopic.c_str(), completeMsg.c_str());
+      
+      Serial.printf("✅ Violation photo sent (%d chunks, %d bytes)\n", chunkNum, fb->len);
+      free(base64_buf);
+    } else {
+      Serial.println("❌ Failed to allocate Base64 buffer");
+    }
+    
+    esp_camera_fb_return(fb);
   }
 
   // Video streaming control
@@ -270,6 +479,24 @@ void callback(char* topic, byte* payload, unsigned int length) {
   if (t.endsWith("/cam/cmd/stop_stream")) {
     streamEnabled = false;
     Serial.println("🎥 MQTT: STOP_STREAM received - disabling stream");
+  }
+
+  // Stream quality presets (runtime adjustable without re-init)
+  if (t.endsWith("/cam/cmd/quality_high")) {
+    sensor_t *s = esp_camera_sensor_get();
+    if (s) {
+      s->set_framesize(s, FRAMESIZE_VGA); // 640x480
+      s->set_quality(s, 10);
+      Serial.println("🎚️ MQTT: Quality set to HIGH (VGA, q=10)");
+    }
+  }
+  if (t.endsWith("/cam/cmd/quality_low")) {
+    sensor_t *s = esp_camera_sensor_get();
+    if (s) {
+      s->set_framesize(s, FRAMESIZE_QQVGA); // 160x120
+      s->set_quality(s, 20);
+      Serial.println("🎚️ MQTT: Quality set to LOW (QQVGA, q=20)");
+    }
   }
 }
 
@@ -283,6 +510,8 @@ void setup() {
   Serial.printf("🎯 ML Input Size: %dx%d\n", EI_CLASSIFIER_INPUT_WIDTH, EI_CLASSIFIER_INPUT_HEIGHT);
 
   WiFi.begin(ssid, password);
+  WiFi.setSleep(false);                       // Keep WiFi radio active for throughput
+  WiFi.setTxPower(WIFI_POWER_19_5dBm);        // Max TX power for stronger link
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     Serial.print(".");
@@ -296,8 +525,11 @@ void setup() {
   server.on("/stream", HTTP_GET, handleStream);
   server.begin();
 
+  // Set larger MQTT buffer for photo transmission
+  client.setBufferSize(MQTT_MAX_PACKET_SIZE);
   client.setServer(mqtt_server, mqtt_port);
   client.setCallback(callback);
+  espClient.setNoDelay(true);                 // Reduce MQTT TCP latency
 }
 
 // ===================== LOOP =====================
@@ -308,6 +540,9 @@ void loop() {
       // SUBSCRIPTIONS
       client.subscribe(("node/" + String(NODE_ID) + "/cam/object_present").c_str());
       client.subscribe(("node/" + String(NODE_ID) + "/cam/cmd/#").c_str());
+      client.subscribe(("node/" + String(NODE_ID) + "/cam/cmd/quality_high").c_str());
+      client.subscribe(("node/" + String(NODE_ID) + "/cam/cmd/quality_low").c_str());
+      client.subscribe(("node/" + String(NODE_ID) + "/cam/cmd/capture_violation").c_str());
 
       // STATUS + STREAM URL
       client.publish(

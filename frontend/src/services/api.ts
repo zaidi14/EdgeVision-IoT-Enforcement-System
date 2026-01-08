@@ -1,6 +1,11 @@
 import axios from "axios";
 
-const API_BASE_URL = "http://192.168.1.110:3000/api";
+// Use environment variables for server IP (set in .env file)
+const SERVER_IP = import.meta.env.VITE_SERVER_IP || "192.168.1.116";
+const SERVER_PORT = import.meta.env.VITE_SERVER_PORT || "3000";
+
+export const API_BASE_URL = `http://${SERVER_IP}:${SERVER_PORT}/api`;
+export const API_BASE = API_BASE_URL.replace(/\/api$/, "");
 
 export type Node = {
   id: number;
@@ -39,6 +44,10 @@ export const api = {
   },
 
   silenceNode: async (nodeId: string): Promise<void> => {
+    await axios.post(API_BASE_URL + "/nodes/" + nodeId + "/silence");
+  },
+
+  silenceBuzzer: async (nodeId: string): Promise<void> => {
     await axios.post(API_BASE_URL + "/nodes/" + nodeId + "/silence");
   },
 
@@ -103,5 +112,15 @@ export const api = {
       videoUrl
     });
     return response.data;
+  },
+
+  getViolations: async (limit = 100): Promise<any[]> => {
+    const response = await axios.get(API_BASE_URL + "/violations", {
+      params: { limit }
+    });
+    return response.data;
   }
 };
+
+// Export fetchViolations as standalone function for backward compatibility
+export const fetchViolations = api.getViolations;

@@ -6,9 +6,10 @@ import './ParkingStatusCard.css';
 interface ParkingStatusCardProps {
   nodeId: string;
   location?: string;
+  cameraVideoUrl?: string;
 }
 
-export default function ParkingStatusCard({ nodeId, location }: ParkingStatusCardProps) {
+export default function ParkingStatusCard({ nodeId, location, cameraVideoUrl }: ParkingStatusCardProps) {
   const { sessions, violations, startTimer, stopTimer, resetSession } = useParking();
   const session = sessions[nodeId];
   const violation = violations[nodeId];
@@ -48,9 +49,20 @@ export default function ParkingStatusCard({ nodeId, location }: ParkingStatusCar
     try {
       setIsRelayingVideo(true);
       setVideoLoading(true);
-      // Use ESP32-CAM IP from environment or default
-      const cameraIp = import.meta.env.VITE_CAMERA_IP || '192.168.1.103';
-      const url = `http://${cameraIp}:80/stream`;
+      
+      // Use camera URL from backend (ESP32-CAM publishes its URL via MQTT)
+      // or fallback to environment variable or default
+      const url = cameraVideoUrl || 
+                  (import.meta.env.VITE_CAMERA_IP ? `http://${import.meta.env.VITE_CAMERA_IP}/stream` : null);
+      
+      if (!url) {
+        console.error('No camera URL available');
+        alert('Camera URL not available. Please ensure ESP32-CAM is connected and publishing its URL.');
+        setIsRelayingVideo(false);
+        setVideoLoading(false);
+        return;
+      }
+      
       setCameraUrl(url);
       setShowVideoModal(true);
       
@@ -71,10 +83,20 @@ export default function ParkingStatusCard({ nodeId, location }: ParkingStatusCar
     try {
       setShowVideoModal(false);
       setIsRelayingVideo(false);
+      // Stop buzzer first
+      await api.silenceBuzzer(nodeId);
       await api.resolveViolation(nodeId, violation?.id);
       resetSession(nodeId);
     } catch (error) {
       console.error('Failed to resolve violation:', error);
+    }
+  };
+
+  const handleSilenceBuzzer = async () => {
+    try {
+      await api.silenceBuzzer(nodeId);
+    } catch (error) {
+      console.error('Failed to silence buzzer:', error);
     }
   };
 
@@ -109,20 +131,23 @@ export default function ParkingStatusCard({ nodeId, location }: ParkingStatusCar
   };
 
   const stateColor = getStateColor(state);
+  const statusClass =
+    state === 'IDLE' ? 'status-idle' :
+    state === 'SOMETHING_DETECTED' ? 'status-detected' :
+    state === 'VEHICLE_DETECTED' ? 'status-vehicle' :
+    'status-violation';
 
   return (
-    <div className="parking-card" style={{ borderLeftColor: stateColor }}>
+    <div className="card" style={{ borderLeft: `6px solid ${stateColor}` }}>
       <div className="card-header">
         <div className="card-title">
-          <span className="state-icon">{getStateIcon(state)}</span>
+          <span style={{ fontSize: 20 }}>{getStateIcon(state)}</span>
           <div>
             <h3>{location || `Node ${nodeId}`}</h3>
-            <p className="node-id">ID: {nodeId}</p>
+            <small>ID: {nodeId}</small>
           </div>
         </div>
-        <div className="card-status" style={{ backgroundColor: stateColor }}>
-          <span>{state}</span>
-        </div>
+        <span className={`status-pill ${statusClass}`}>{state}</span>
       </div>
 
       <div className="card-body">
@@ -173,6 +198,12 @@ export default function ParkingStatusCard({ nodeId, location }: ParkingStatusCar
                 disabled={isRelayingVideo}
               >
                 📹 {isRelayingVideo ? 'Relaying...' : 'Relay Video'}
+              </button>
+              <button
+                className="btn btn-warning"
+                onClick={handleSilenceBuzzer}
+              >
+                🔇 Silence Buzzer
               </button>
               <button
                 className="btn btn-secondary"

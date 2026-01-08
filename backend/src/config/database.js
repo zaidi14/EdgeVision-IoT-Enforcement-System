@@ -60,6 +60,14 @@ export async function initViolationLogs() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
+
+    // Backfill new columns for existing installations
+    await client.query(`ALTER TABLE violation_logs ADD COLUMN IF NOT EXISTS photo_path TEXT;`);
+    await client.query(`ALTER TABLE violation_logs ADD COLUMN IF NOT EXISTS photo_size INTEGER;`);
+    await client.query(`ALTER TABLE violation_logs ADD COLUMN IF NOT EXISTS ml_confidence FLOAT;`);
+    await client.query(`ALTER TABLE violation_logs ADD COLUMN IF NOT EXISTS session_id INTEGER;`);
+    await client.query(`ALTER TABLE violation_logs ADD COLUMN IF NOT EXISTS video_url TEXT;`);
+    await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS uniq_violation_session ON violation_logs(session_id) WHERE session_id IS NOT NULL;`);
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_violation_logs_node_id ON violation_logs(node_id);
     `);
@@ -88,13 +96,56 @@ export async function initViolationLogs() {
   }
 }
 
-export async function logViolation(nodeId, type, details) {
+export async function logViolation(nodeId, type, details, metadata = {}) {
+  const { photoPath, photoSize, mlConfidence, videoUrl, sessionId } = metadata;
+
+  // Check if violation already exists for this session
+  if (sessionId) {
+    const existing = await pool.query(
+      'SELECT id FROM violation_logs WHERE session_id = $1',
+      [sessionId]
+    );
+    
+    if (existing.rows.length > 0) {
+      // Update existing violation
+      const query = `
+        UPDATE violation_logs SET
+          details = $1,
+          photo_path = COALESCE($2, photo_path),
+          photo_size = COALESCE($3, photo_size),
+          ml_confidence = COALESCE($4, ml_confidence),
+          video_url = COALESCE($5, video_url)
+        WHERE session_id = $6
+        RETURNING *;
+      `;
+      const result = await pool.query(query, [
+        details,
+        photoPath || null,
+        photoSize || null,
+        mlConfidence || null,
+        videoUrl || null,
+        sessionId
+      ]);
+      return result.rows[0];
+    }
+  }
+
+  // Insert new violation
   const query = `
-    INSERT INTO violation_logs (node_id, violation_type, details)
-    VALUES ($1, $2, $3)
+    INSERT INTO violation_logs (node_id, violation_type, details, photo_path, photo_size, ml_confidence, video_url, session_id)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
     RETURNING *;
   `;
-  const result = await pool.query(query, [nodeId, type, details]);
+  const result = await pool.query(query, [
+    nodeId,
+    type,
+    details,
+    photoPath || null,
+    photoSize || null,
+    mlConfidence || null,
+    videoUrl || null,
+    sessionId || null
+  ]);
   return result.rows[0];
 }
 
@@ -173,11 +224,19 @@ export async function closeParkingSession(sessionId) {
 }
 
 export async function getViolationLogs(nodeId, limit = 50) {
-  const result = await pool.query(
-    'SELECT * FROM violation_logs WHERE node_id = $1 ORDER BY created_at DESC LIMIT $2',
-    [nodeId, limit]
-  );
-  return result.rows;
+  if (nodeId) {
+    const result = await pool.query(
+      'SELECT * FROM violation_logs WHERE node_id = $1 ORDER BY created_at DESC LIMIT $2',
+      [nodeId, limit]
+    );
+    return result.rows;
+  } else {
+    const result = await pool.query(
+      'SELECT * FROM violation_logs ORDER BY created_at DESC LIMIT $1',
+      [limit]
+    );
+    return result.rows;
+  }
 }
 
 export async function deleteNode(nodeId) {

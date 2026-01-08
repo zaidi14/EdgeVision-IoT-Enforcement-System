@@ -12,7 +12,7 @@ const char* password = "kXcyDU7b3HCx";
 // ========================================
 // MQTT
 // ========================================
-const char* mqtt_server = "192.168.1.110";
+const char* mqtt_server = "192.168.1.116";
 const int   mqtt_port   = 1883;
 const char* mqtt_user   = "mojiz";
 const char* mqtt_pass   = "1735";
@@ -20,7 +20,7 @@ const char* mqtt_pass   = "1735";
 const char* NODE_ID = "parking_zone_c1";
 const char* MQTT_CLIENT_ID = "parking_zone_c1_ctrl";
 
-const char* SERVER_IP = "192.168.1.110";
+const char* SERVER_IP = "192.168.1.116";
 const int SERVER_PORT = 3000;
 
 // ========================================
@@ -223,7 +223,15 @@ void callback(char* topic, byte* payload, unsigned int length) {
       isViolationCountdownActive = true;
       violationCountdownTimer = duration;
       vehicleDetectedAt = millis();
+      state = VEHICLE_DETECTED;  // Move to VEHICLE_DETECTED state
     }
+  }
+  
+  // Vehicle confirmed by ML
+  if (t.endsWith("/cam/ml_result")) {
+    Serial.println("🚗 ML confirmed vehicle detection");
+    vehicleConfirmed = true;
+    state = VEHICLE_DETECTED;
   }
 }
 
@@ -383,7 +391,7 @@ void updateStateMachine() {
       break;
 
     case SOMETHING_DETECTED: {
-      setLEDState("AMBER");
+      setLEDState("GREEN");  // Keep green LED on during detection
       
       // Object still there?
       if (distance < 0 || distance > CLEAR_DISTANCE) {
@@ -411,7 +419,7 @@ void updateStateMachine() {
     }
 
     case VEHICLE_DETECTED: {
-      setLEDState("BLUE");
+      setLEDState("GREEN");  // Keep green LED on until violation
       
       // Check if vehicle still present
       if (distance < 0 || distance > CLEAR_DISTANCE) {
@@ -445,6 +453,8 @@ void triggerViolation() {
   state = VIOLATION;
   setLEDState("RED");
   startBuzzer();
+  // Publish MQTT violation so backend/socket can update UI even if HTTP fails
+  client.publish((String("node/") + NODE_ID + "/ctrl/violation").c_str(), "1");
   notifyBackendViolation();
 }
 

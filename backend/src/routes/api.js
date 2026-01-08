@@ -13,7 +13,7 @@ import {
   getActiveParkingSession,
   closeParkingSession
 } from '../config/database.js';
-import { publishMqtt } from '../services/mqttService.js';
+import { publishMqtt, clearPhotoCaptureFlag } from '../services/mqttService.js';
 
 const router = express.Router();
 
@@ -57,6 +57,17 @@ router.get('/nodes/:nodeId/violations', async (req, res) => {
     res.json(await getViolationLogs(req.params.nodeId, parseInt(req.query.limit) || 50));
   } catch (error) {
     res.status(500).json({ error: 'Failed' });
+  }
+});
+
+// Get all violations across all nodes
+router.get('/violations', async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 100;
+    const violations = await getViolationLogs(null, limit); // null = all nodes
+    res.json(violations);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch violations' });
   }
 });
 
@@ -277,8 +288,11 @@ router.post('/nodes/:nodeId/violation/report', async (req, res) => {
     await updateParkingState(nodeId, 'VIOLATION', session.id);
     await updateSessionTimestamp(session.id, 'violation_time');
     
-    // Log violation
-    const violation = await logViolation(nodeId, 'PARKING_VIOLATION', details);
+    // Log violation (upsert by session)
+    const violation = await logViolation(nodeId, 'PARKING_VIOLATION', details, {
+      videoUrl,
+      sessionId: session.id
+    });
     
     // Update node
     await upsertNode({
@@ -327,6 +341,9 @@ router.post('/nodes/:nodeId/violation/resolve', async (req, res) => {
     const { violationId } = req.body;
     
     console.log(`✅ Resolving violation on ${nodeId}`);
+    
+    // Clear photo capture flag so next detection can capture fresh photo
+    clearPhotoCaptureFlag(nodeId);
     
     // Reset to IDLE
     const session = await getActiveParkingSession(nodeId);
