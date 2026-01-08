@@ -344,9 +344,9 @@ https://drive.google.com/file/d/1yai9J0rBJ-RyXSsxcO8-n4GXpXs1HBnq/view?usp=drive
 
 **Course:** COMP 413 – Internet of Things: Final Project  
 **Group Members:**
-1. ZAIDI SYED MUHAMMAD MOJIZ ALI  
-2. ERYAŞAR SELİN  
-3. KABA GÜLESER  
+1. SYED MUHAMMAD MOJIZ ALI ZAIDI 
+2. SELİN ERYAŞAR 
+3. GÜLESER KABA 
 4. MOHAMED MOSTAFA MOHAMED MAHMOUD MOHAMEDY  
 
 **References:**
