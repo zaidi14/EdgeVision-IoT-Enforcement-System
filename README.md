@@ -18,9 +18,6 @@ This project implements a **real-time, edge-AI-powered IoT system** to detect an
 - ✅ **Full-stack cloud integration** (Node.js backend, React dashboard, PostgreSQL)
 
 
-### LIVE VIDEO DEMO
-https://drive.google.com/file/d/1TSXFx4bkya--dbuV1GhmrOQQIrGRqzua/view
----
 
 ## Problem Statement & Motivation
 
@@ -335,9 +332,10 @@ iot-parking-monitor/
 
 ---
 
-## Live Dashboard
 
-**[Parking Monitor Dashboard](#)** (accessible at `http://<your-backend-ip>:5000` or deployed frontend URL)
+### LIVE VIDEO DEMO
+https://drive.google.com/file/d/1TSXFx4bkya--dbuV1GhmrOQQIrGRqzua/view
+---
 
 ---
 
