@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
-import { api, Node, ViolationLog } from './services/api';
+import { api, Node, ViolationLog, API_BASE } from './services/api';
 import { ParkingProvider, useParking } from './context/ParkingContext';
 import './styles/theme.css';
 import PhoneCameraStream from './components/PhoneCameraStream';
@@ -21,7 +21,7 @@ function AppContent() {
   useEffect(() => {
     api.getNodes().then(setNodes);
     
-    const socketInstance = io('http://192.168.1.116:3000');
+    const socketInstance = io(API_BASE);
     
     socketInstance.on('connect', () => {
       console.log('✅ Connected');
