@@ -246,26 +246,36 @@ This system is built on three invariants:
 ## 9. REPOSITORY STRUCTURE
 
 ```
-iot-parking-monitor/
-├── ESP32/
-│   ├── ESP32-MAIN/        → Ultrasonic + state controller firmware
-│   ├── ESP32-CAM/         → Camera + ML inference node
-│   └── ML_Model/          → Edge Impulse TinyML model
-│
-├── backend/
-│   ├── server.js          → MQTT bridge + state engine
-│   ├── services/          → Violation logic + timers
-│   └── config/            → DB + MQTT configuration
-│
-├── frontend/
-│   ├── App.tsx            → Dashboard UI
-│   ├── components/        → Video + state panels
-│   └── services/          → API + MQTT client
-│
-├── md_Files/
-│   └── architecture.md    → Extended documentation
-│
-└── README.md
+## Repository Structure
+
+```
+EdgeVision-IoT-Enforcement-System/
+├── ESP32/                       # Firmware for hardware nodes (ESP32-MAIN & ESP32-CAM)
+│   ├── ESP32-MAIN/              # Parking sensor controller code
+│   │   └── ESP32-MAIN.ino       # Main firmware for ESP32-MAIN (ultrasonic, LEDs, buzzer)
+│   ├── ESP32-CAM/               # Edge camera & ML model code
+│   │   └── ESP32-CAM.ino        # Main firmware for ESP32-CAM (video, TinyML)
+│   └── ML_Model/                # Machine learning inferencing files
+│       └── illegal-parking-car-detection_inferencing/ # Edge Impulse model for car detection
+├── backend/                     # Cloud/server backend code
+│   ├── src/                     # Source code for backend services
+│   │   ├── server.js            # Express entrypoint, MQTT/Socket.IO bridge
+│   │   ├── config/              # Config files (database, MQTT, etc)
+│   │   ├── routes/              # Express route handlers
+│   │   └── services/            # Backend business logic (timers, state machine)
+│   └── package.json             # Backend npm dependencies and scripts
+├── frontend/                    # Dashboard web app
+│   ├── src/                     # App source code
+│   │   ├── App.tsx              # React app entrypoint
+│   │   ├── components/          # Frontend UI components
+│   │   ├── context/             # React context/state management
+│   │   ├── services/            # API/MQTT integration helpers
+│   │   └── styles/              # CSS/SCSS assets
+│   └── package.json             # Frontend npm dependencies and scripts
+├── md_Files/                    # Additional documentation (markdown files, diagrams)
+├── LICENSE                      # Project license (MIT)
+└── README.md                    # Project documentation (this file)
+```
 ```
 
 ---
