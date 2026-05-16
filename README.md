@@ -264,7 +264,7 @@ This system is built on three invariants:
 
 ---
 
-## 📁 REPOSITORY STRUCTURE
+## 9. REPOSITORY STRUCTURE
 
 ```text
 EdgeVision-IoT-Enforcement-System/
@@ -312,7 +312,7 @@ EdgeVision-IoT-Enforcement-System/
 
 ---
 
-## 🎥 VIDEO DEMO
+## 10.  VIDEO DEMO
 
 * **🎬 Live System Demo:** [Watch on Google Drive](https://drive.google.com/file/d/1TSXFx4bkya--dbuV1GhmrOQQIrGRqzua/view)
 * **🔄 End-to-End Flow Demo:** [Watch on Google Drive](https://drive.google.com/file/d/1yai9J0rBJ-RyXSsxcO8-n4GXpXs1HBnq/view)
