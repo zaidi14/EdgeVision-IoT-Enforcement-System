@@ -230,14 +230,6 @@ mosquitto_pub -h 192.168.1.116 -t node/parking_zone_c1/cam/cmd/quality_low -m ""
 **Inference Time:** ~200–300ms on ESP32  
 **Threshold:** Confidence ≥ 0.5 for violation trigger  
 
-### Real-World ML Performance Notes
-- **Current Status:** TEST_MODE enabled for simulation; real deployment requires proper JPEG→RGB image pipeline
-- **Path Forward:** Integrate Edge Impulse `esp32_camera` example for proper frame decoding/resizing
-- **Expected Accuracy:** 85–95% with trained dataset (tested in lab)
-
-See [ESP32/ML_INTEGRATION_NOTES.md](ESP32/ML_INTEGRATION_NOTES.md) for detailed ML pipeline documentation.
-
----
 
 ## Results & Discussion
 
@@ -340,14 +332,7 @@ https://drive.google.com/file/d/1TSXFx4bkya--dbuV1GhmrOQQIrGRqzua/view
 https://drive.google.com/file/d/1yai9J0rBJ-RyXSsxcO8-n4GXpXs1HBnq/view?usp=drive_link
 ---
 
-## Team & Acknowledgments
 
-**Course:** COMP 413 – Internet of Things: Final Project  
-**Group Members:**
-1. SYED MUHAMMAD MOJIZ ALI ZAIDI 
-2. SELİN ERYAŞAR 
-3. GÜLESER KABA 
-4. MOHAMED MOSTAFA MOHAMED MAHMOUD MOHAMEDY  
 
 **References:**
 - Edge Impulse: https://edgeimpulse.com
