@@ -252,6 +252,15 @@ npm run dev
 ---
 
 ## 8. SYSTEM DESIGN PRINCIPLE
+**Principle: “Confirm before escalate, observe before act.”**
+This system is built on three invariants:
+
+1. No single sensor can trigger a violation alone
+
+2. Every escalation requires multi-layer confirmation
+
+3. System always defaults to SAFE state on uncertainty
+
 
 ---
 
