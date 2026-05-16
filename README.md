@@ -1,6 +1,4 @@
-Good. I’m going to convert this into your **standard 10-layer engineering README format** and tighten it so it reads like a **production-grade IoT system**, not a coursework report.
 
----
 
 # EdgeVision — IoT Illegal Parking Violation Detection System
 
