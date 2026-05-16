@@ -246,38 +246,48 @@ This system is built on three invariants:
 ## 9. REPOSITORY STRUCTURE
 
 ```
-## Repository Structure
 
-```
 EdgeVision-IoT-Enforcement-System/
-├── ESP32/                       # Firmware for hardware nodes (ESP32-MAIN & ESP32-CAM)
-│   ├── ESP32-MAIN/              # Parking sensor controller code
-│   │   └── ESP32-MAIN.ino       # Main firmware for ESP32-MAIN (ultrasonic, LEDs, buzzer)
-│   ├── ESP32-CAM/               # Edge camera & ML model code
-│   │   └── ESP32-CAM.ino        # Main firmware for ESP32-CAM (video, TinyML)
-│   └── ML_Model/                # Machine learning inferencing files
-│       └── illegal-parking-car-detection_inferencing/ # Edge Impulse model for car detection
-├── backend/                     # Cloud/server backend code
-│   ├── src/                     # Source code for backend services
-│   │   ├── server.js            # Express entrypoint, MQTT/Socket.IO bridge
-│   │   ├── config/              # Config files (database, MQTT, etc)
-│   │   ├── routes/              # Express route handlers
-│   │   └── services/            # Backend business logic (timers, state machine)
-│   └── package.json             # Backend npm dependencies and scripts
-├── frontend/                    # Dashboard web app
-│   ├── src/                     # App source code
-│   │   ├── App.tsx              # React app entrypoint
-│   │   ├── components/          # Frontend UI components
-│   │   ├── context/             # React context/state management
-│   │   ├── services/            # API/MQTT integration helpers
-│   │   └── styles/              # CSS/SCSS assets
-│   └── package.json             # Frontend npm dependencies and scripts
-├── md_Files/                    # Additional documentation (markdown files, diagrams)
-├── LICENSE                      # Project license (MIT)
-└── README.md                    # Project documentation (this file)
+│
+├── ESP32/                          → Edge hardware layer (real-world sensing + actuation)
+│   │
+│   ├── ESP32-MAIN/                → Primary sensor & state controller node
+│   │   └── ESP32-MAIN.ino         → Ultrasonic sensing, LED signaling, buzzer alerts
+│   │
+│   ├── ESP32-CAM/                 → Vision + inference node (edge AI layer)
+│   │   └── ESP32-CAM.ino         → Camera capture + TinyML inference pipeline
+│   │
+│   └── ML_Model/                 → Embedded ML artifacts (Edge Impulse runtime)
+│       └── illegal-parking-car-detection_inferencing/
+│                                  → Pretrained car detection model for ESP32-CAM
+│
+├── backend/                       → Cloud orchestration & decision engine
+│   │
+│   ├── src/
+│   │   ├── server.js             → System entrypoint (Express + MQTT + Socket.IO bridge)
+│   │   ├── config/               → Environment + database + MQTT configuration
+│   │   ├── routes/               → API endpoints for dashboard/control plane
+│   │   └── services/            → Core logic (state machine, timers, violation engine)
+│   │
+│   └── package.json             → Backend runtime dependencies + scripts
+│
+├── frontend/                      → Observability + control dashboard (human interface layer)
+│   │
+│   ├── src/
+│   │   ├── App.tsx              → Main UI runtime (dashboard shell)
+│   │   ├── components/          → Reusable visualization + control components
+│   │   ├── context/            → Global state (zone status, alerts, telemetry)
+│   │   ├── services/           → API + MQTT subscription handlers
+│   │   └── styles/             → UI styling system
+│   │
+│   └── package.json           → Frontend dependencies + build scripts
+│
+├── md_Files/                     → System documentation layer
+│   └── architecture.md          → Extended system design + diagrams
+│
+├── LICENSE                       → MIT license (open usage boundary)
+└── README.md                     → System-level documentation entrypoint
 ```
-```
-
 ---
 
 ## 10. VIDEO DEMO
