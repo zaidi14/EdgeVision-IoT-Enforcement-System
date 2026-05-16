@@ -13,7 +13,29 @@ It solves the problem of **manual, delayed, and inconsistent parking enforcement
 Domain: **Smart City IoT / Edge AI / Real-time Detection Systems**
 
 ---
+## SKILL MAPPING (Recruiter View)
 
+### IoT & Distributed Systems
+* MQTT-based distributed device communication
+* Multi-node sensor network coordination
+* Edge-to-cloud event streaming systems
+
+### Edge AI / Embedded Systems
+* TinyML inference on ESP32 devices
+* Real-time sensor fusion (ultrasonic + vision)
+* Embedded firmware design for state machines
+
+### Systems Engineering
+* Real-time violation detection pipelines
+* State machine-based escalation logic
+* Event-driven control architecture
+
+### 📡 Network Engineering
+* Low-latency device communication protocols
+* Pub/sub messaging systems (MQTT)
+* Edge network optimization techniques
+
+---
 ## 2. ARCHITECTURE OVERVIEW
 
 ### System Flow
